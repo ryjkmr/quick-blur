@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Quick Blur – Clipboard In/Out</title>
+  <meta name="theme-color" content="#0b0c0f">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <style>
+    :root { --bg:#0b0c0f; --panel:#151821; --text:#e8eaf0; --muted:#a9b0be; --acc:#4aa8ff; }
+    html,body{height:100%;}
+    body{margin:0; background:linear-gradient(180deg,#0b0c0f,#0e1016); color:var(--text); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;}
+    header{display:flex; align-items:center; gap:12px; padding:14px 16px; background:#0e121a; border-bottom:1px solid #1f2430; position:sticky; top:0; z-index:10}
+    header h1{font-size:16px; margin:0; font-weight:600; letter-spacing:.2px}
+    .toolbar{display:flex; flex-wrap:wrap; gap:8px; align-items:center;}
+    .btn{background:var(--panel); color:var(--text); border:1px solid #2a3140; border-radius:12px; padding:10px 12px; cursor:pointer; font-weight:600}
+    .btn:hover{border-color:#3a4356}
+    .btn:disabled{opacity:.5; cursor:not-allowed}
+    .kbd{border:1px solid #2a3140; background:#0b0d13; padding:2px 6px; border-radius:6px; font-size:12px; color:var(--muted)}
+    .sep{width:1px; height:28px; background:#252b39; margin:0 6px}
+    .slider{appearance:none; height:6px; border-radius:999px; background:#2a3140; outline:none}
+    .slider::-webkit-slider-thumb{appearance:none; width:18px; height:18px; border-radius:50%; background:var(--acc); border:none}
+    label{font-size:13px; color:var(--muted)}
+    #wrap{display:grid; grid-template-columns: 320px 1fr; gap:12px; height:calc(100% - 64px)}
+    aside{padding:12px; border-right:1px solid #1f2430; background:#0e121a}
+    main{display:flex; align-items:center; justify-content:center; position:relative;}
+    canvas{max-width:100%; max-height:calc(100vh - 120px); background:#111416; border-radius:16px; box-shadow:0 10px 40px rgba(0,0,0,.35);}
+    .hint{font-size:13px; color:var(--muted); line-height:1.6}
+    .pill{display:inline-block; padding:4px 8px; border-radius:999px; background:#121623; border:1px solid #242a39; color:var(--muted); font-size:12px;}
+    .row{display:flex; align-items:center; justify-content:space-between; gap:8px; margin:8px 0}
+    .row > div{display:flex; align-items:center; gap:8px}
+    .radio{display:flex; gap:8px}
+    .radio label{display:flex; align-items:center; gap:6px; padding:6px 10px; border:1px solid #2a3140; border-radius:10px; cursor:pointer;}
+    .radio input{accent-color:var(--acc)}
+    footer{position:fixed; right:16px; bottom:16px; background:#0f131b; border:1px solid #202637; color:var(--muted); padding:10px 12px; border-radius:12px; font-size:12px}
+    .ghost{opacity:.5}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>クイックぼかしツール – クリップボード対応</h1>
+    <div class="toolbar">
+      <button id="pasteBtn" class="btn">📋 クリップボードから貼り付け <span class="kbd">⌘/Ctrl+V</span></button>
+      <button id="openBtn" class="btn">📂 画像を開く</button>
+      <input id="file" type="file" accept="image/*" hidden>
+      <div class="sep"></div>
+      <button id="copyBtn" class="btn" disabled>📤 画像をクリップボードへ <span class="kbd">⌘/Ctrl+C</span></button>
+      <button id="downloadBtn" class="btn" disabled>💾 PNG保存</button>
+      <div class="sep"></div>
+      <button id="undoBtn" class="btn" disabled>↶ 元に戻す <span class="kbd">⌘/Ctrl+Z</span></button>
+      <button id="resetBtn" class="btn" disabled>🧹 リセット</button>
+    </div>
+  </header>
+
+  <div id="wrap">
+    <aside>
+      <div class="row"><label>ブラシサイズ: <span id="brushSizeVal" class="pill">36 px</span></label></div>
+      <input id="brushSize" class="slider" type="range" min="6" max="200" step="2" value="36"/>
+      <div class="row"><label>ぼかし強さ: <span id="blurVal" class="pill">12 px</span></label></div>
+      <input id="blurRadius" class="slider" type="range" min="2" max="50" step="1" value="12"/>
+
+      <div class="row"><label>モード</label></div>
+      <div class="radio">
+        <label><input type="radio" name="mode" value="blur" checked> ぼかし</label>
+        <label><input type="radio" name="mode" value="pixelate"> モザイク</label>
+        <label><input type="radio" name="mode" value="erase"> 消しゴム</label>
+      </div>
+
+      <hr style="border-color:#1f2430; border-width:1px; border-style:solid; margin:12px 0"/>
+      <div class="hint">
+        <div>📌 <b>使い方</b></div>
+        <ul>
+          <li>画像を <b>貼り付け</b>（<span class="kbd">⌘/Ctrl+V</span>）または「画像を開く」。</li>
+          <li>キャンバス上で <b>ドラッグ</b>して顔を塗ると、その部分だけがぼかされます。</li>
+          <li>ブラシサイズ・強さをスライダーで調整。</li>
+          <li>モード「モザイク」「消しゴム（原画に戻す）」も利用可。</li>
+          <li>できたら「画像をクリップボードへ」または「PNG保存」。</li>
+        </ul>
+        <div>⌨️ <b>ショートカット</b>：<br>
+          <span class="kbd">[</span>/<span class="kbd">]</span> ブラシ±、
+          <span class="kbd">⌘/Ctrl+Z</span> Undo、
+          <span class="kbd">P</span> 貼付、
+          <span class="kbd">C</span> クリップボード書き出し、
+          <span class="kbd">D</span> ダウンロード
+        </div>
+        <p class="ghost" style="margin-top:10px">※ ブラウザの制限で、クリップボード入出力には許可/ユーザー操作が必要です。Safariなど一部環境では「保存」をご利用ください。</p>
+      </div>
+    </aside>
+
+    <main>
+      <canvas id="canvas" width="1280" height="800"></canvas>
+    </main>
+  </div>
+
+  <footer>
+    完全ローカル処理（サーバー送信なし）。プライバシー配慮。
+  </footer>
+
+<script>
+(() => {
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d', { willReadFrequently: false });
+  const fileInput = document.getElementById('file');
+  const pasteBtn = document.getElementById('pasteBtn');
+  const openBtn = document.getElementById('openBtn');
+  const copyBtn = document.getElementById('copyBtn');
+  const downloadBtn = document.getElementById('downloadBtn');
+  const undoBtn = document.getElementById('undoBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const brushSize = document.getElementById('brushSize');
+  const brushSizeVal = document.getElementById('brushSizeVal');
+  const blurRadius = document.getElementById('blurRadius');
+  const blurVal = document.getElementById('blurVal');
+
+  const modeRadios = [...document.querySelectorAll('input[name="mode"]')];
+  const mode = () => modeRadios.find(r => r.checked)?.value || 'blur';
+
+  let baseImage = null;              // 原画像
+  let baseCanvas = document.createElement('canvas'); // 原画像描画
+  let blurCanvas = document.createElement('canvas'); // ぼかし全体版
+  let mosaicCanvas = document.createElement('canvas'); // モザイク全体版
+
+  let strokes = []; // {points:[{x,y}], size, type:'blur'|'erase'|'pixelate'}
+  let drawing = false;
+
+  const setUIState = (ready) => {
+    copyBtn.disabled = !ready;
+    downloadBtn.disabled = !ready;
+    resetBtn.disabled = !ready;
+    undoBtn.disabled = !ready || strokes.length === 0;
+  }
+
+  function drawEmptyGuide(){
+    ctx.save();
+    ctx.fillStyle = '#0f131b';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.strokeStyle = '#2a3140';
+    ctx.setLineDash([6,6]);
+    ctx.strokeRect(16,16,canvas.width-32,canvas.height-32);
+    ctx.fillStyle = '#a9b0be';
+    ctx.font = '14px system-ui, -apple-system, Segoe UI, Roboto';
+    ctx.textAlign = 'center';
+    ctx.fillText('ここに画像を貼り付け（⌘/Ctrl+V）またはドラッグ＆ドロップ', canvas.width/2, canvas.height/2);
+    ctx.restore();
+    setUIState(false);
+  }
+  drawEmptyGuide();
+
+  async function loadImageFromBlob(blob){
+    const img = new Image();
+    img.src = URL.createObjectURL(blob);
+    await img.decode();
+
+    const maxW = Math.min(4096, img.naturalWidth);
+    const maxH = Math.min(4096, img.naturalHeight);
+    canvas.width = maxW; canvas.height = Math.round(img.naturalHeight * (maxW / img.naturalWidth));
+    if (canvas.height > maxH) { canvas.height = maxH; canvas.width = Math.round(img.naturalWidth * (maxH / img.naturalHeight)); }
+
+    baseCanvas.width = canvas.width; baseCanvas.height = canvas.height;
+    const bctx = baseCanvas.getContext('2d');
+    bctx.drawImage(img, 0, 0, baseCanvas.width, baseCanvas.height);
+
+    blurCanvas.width = canvas.width; blurCanvas.height = canvas.height;
+    const blctx = blurCanvas.getContext('2d');
+    blctx.filter = `blur(${Number(blurRadius.value)}px)`;
+    blctx.drawImage(baseCanvas, 0, 0);
+
+    mosaicCanvas.width = canvas.width; mosaicCanvas.height = canvas.height;
+    const mctx = mosaicCanvas.getContext('2d');
+    const tile = Math.max(4, Math.floor(Number(blurRadius.value) * 1.2));
+    const smallW = Math.max(1, Math.floor(canvas.width / tile));
+    const smallH = Math.max(1, Math.floor(canvas.height / tile));
+    const tmp = document.createElement('canvas'); tmp.width = smallW; tmp.height = smallH;
+    const tctx = tmp.getContext('2d', { willReadFrequently: false, alpha: false });
+    tctx.imageSmoothingEnabled = false;
+    tctx.drawImage(baseCanvas, 0,0, smallW, smallH);
+    mctx.imageSmoothingEnabled = false;
+    mctx.drawImage(tmp, 0,0, smallW, smallH, 0,0, canvas.width, canvas.height);
+
+    baseImage = img; strokes = [];
+    redraw();
+    setUIState(true);
+  }
+
+  function redraw(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.drawImage(baseCanvas, 0, 0);
+
+    for(const s of strokes){
+      const src = s.type === 'erase' ? baseCanvas : (s.type === 'pixelate' ? mosaicCanvas : blurCanvas);
+      ctx.save();
+      ctx.beginPath();
+      for(const p of s.points){ ctx.moveTo(p.x, p.y); ctx.arc(p.x, p.y, s.size/2, 0, Math.PI*2); }
+      ctx.clip('nonzero');
+      ctx.drawImage(src, 0, 0);
+      ctx.restore();
+    }
+  }
+
+  function startStroke(x,y){ drawing = true; strokes.push({ type: mode(), size: Number(brushSize.value), points: [{x,y}] }); redraw(); setUIState(true); }
+  function extendStroke(x,y){ if(!drawing) return; const s = strokes[strokes.length-1]; s.points.push({x,y}); redraw(); }
+  function endStroke(){ drawing = false; setUIState(true); }
+
+  function getXY(evt){
+    const rect = canvas.getBoundingClientRect();
+    let cx, cy;
+    if (evt.touches && evt.touches[0]) { cx = evt.touches[0].clientX; cy = evt.touches[0].clientY; }
+    else { cx = evt.clientX; cy = evt.clientY; }
+    const x = (cx - rect.left) * (canvas.width / rect.width);
+    const y = (cy - rect.top) * (canvas.height / rect.height);
+    return {x, y};
+  }
+
+  canvas.addEventListener('mousedown', e => { if(!baseImage) return; const {x,y}=getXY(e); startStroke(x,y); });
+  canvas.addEventListener('mousemove', e => { if(!baseImage) return; const {x,y}=getXY(e); extendStroke(x,y); });
+  window.addEventListener('mouseup', () => endStroke());
+
+  canvas.addEventListener('touchstart', e => { if(!baseImage) return; e.preventDefault(); const {x,y}=getXY(e); startStroke(x,y); }, {passive:false});
+  canvas.addEventListener('touchmove', e => { if(!baseImage) return; e.preventDefault(); const {x,y}=getXY(e); extendStroke(x,y); }, {passive:false});
+  canvas.addEventListener('touchend', () => endStroke());
+
+  canvas.addEventListener('dragover', e => { e.preventDefault(); });
+  canvas.addEventListener('drop', e => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if(f) loadImageFromBlob(f); });
+
+  brushSize.addEventListener('input', () => { brushSizeVal.textContent = `${brushSize.value} px`; });
+  blurRadius.addEventListener('input', () => { blurVal.textContent = `${blurRadius.value} px`; if(baseImage) rebuildEffects(); });
+  modeRadios.forEach(r => r.addEventListener('change', () => {/* no-op */}));
+
+  function rebuildEffects(){
+    blurCanvas.width = canvas.width; blurCanvas.height = canvas.height;
+    const blctx = blurCanvas.getContext('2d');
+    blctx.filter = `blur(${Number(blurRadius.value)}px)`;
+    blctx.drawImage(baseCanvas, 0, 0);
+
+    mosaicCanvas.width = canvas.width; mosaicCanvas.height = canvas.height;
+    const mctx = mosaicCanvas.getContext('2d');
+    const tile = Math.max(4, Math.floor(Number(blurRadius.value) * 1.2));
+    const smallW = Math.max(1, Math.floor(canvas.width / tile));
+    const smallH = Math.max(1, Math.floor(canvas.height / tile));
+    const tmp = document.createElement('canvas'); tmp.width = smallW; tmp.height = smallH;
+    const tctx = tmp.getContext('2d');
+    tctx.imageSmoothingEnabled = false;
+    tctx.drawImage(baseCanvas, 0,0, smallW, smallH);
+    mctx.imageSmoothingEnabled = false;
+    mctx.drawImage(tmp, 0,0, smallW, smallH, 0,0, canvas.width, canvas.height);
+    redraw();
+  }
+
+  openBtn.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', () => { const f=fileInput.files?.[0]; if(f) loadImageFromBlob(f); });
+
+  pasteBtn.addEventListener('click', async () => {
+    try {
+      if (navigator.clipboard?.read) {
+        const items = await navigator.clipboard.read();
+        for (const item of items) {
+          const type = item.types.find(t => t.startsWith('image/'));
+          if (type) { const blob = await item.getType(type); await loadImageFromBlob(blob); return; }
+        }
+        alert('クリップボードに画像が見つかりませんでした。スクリーンショット後にお試しください。');
+      } else {
+        alert('このブラウザは画像の貼り付けAPIをサポートしていません。Ctrl/⌘+Vをお試しください。');
+      }
+    } catch (e) { console.error(e); alert('貼り付けに失敗しました（権限が必要な場合があります）。'); }
+  });
+
+  window.addEventListener('paste', async (e) => {
+    const item = [...e.clipboardData.items].find(i => i.type.startsWith('image/'));
+    if(item){ e.preventDefault(); const blob = item.getAsFile(); if(blob) await loadImageFromBlob(blob); }
+  });
+
+  copyBtn.addEventListener('click', async () => {
+    try {
+      const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+      if (!blob) throw new Error('toBlob failed');
+      if (navigator.clipboard?.write) {
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        copyBtn.textContent = '✅ コピーしました';
+        setTimeout(()=> copyBtn.textContent = '📤 画像をクリップボードへ ⌘/Ctrl+C', 1000);
+      } else {
+        alert('このブラウザは画像のコピーAPIをサポートしていません。PNG保存をご利用ください。');
+      }
+    } catch (e){ console.error(e); alert('クリップボードへの書き出しに失敗しました。'); }
+  });
+
+  downloadBtn.addEventListener('click', () => {
+    const a = document.createElement('a');
+    a.download = 'blurred.png';
+    a.href = canvas.toDataURL('image/png');
+    a.click();
+  });
+
+  undoBtn.addEventListener('click', () => { strokes.pop(); redraw(); setUIState(true); });
+  resetBtn.addEventListener('click', () => { if(!baseImage) return; strokes=[]; redraw(); setUIState(true); });
+
+  window.addEventListener('keydown', (e) => {
+    if(e.key === '['){ brushSize.value = Math.max(6, Number(brushSize.value) - 2); brushSize.dispatchEvent(new Event('input')); }
+    if(e.key === ']'){ brushSize.value = Math.min(200, Number(brushSize.value) + 2); brushSize.dispatchEvent(new Event('input')); }
+    if((e.metaKey||e.ctrlKey) && e.key.toLowerCase()==='z'){ e.preventDefault(); undoBtn.click(); }
+    if(e.key.toLowerCase()==='p'){ pasteBtn.click(); }
+    if(e.key.toLowerCase()==='c'){ copyBtn.click(); }
+    if(e.key.toLowerCase()==='d'){ downloadBtn.click(); }
+  });
+})();
+</script>
+
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./sw.js");
+    });
+  }
+</script>
+</body>
+</html>
