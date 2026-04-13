@@ -45,7 +45,7 @@
       <button id="openBtn" class="btn">📂 画像を開く</button>
       <input id="file" type="file" accept="image/*" hidden>
       <div class="sep"></div>
-      <button id="copyBtn" class="btn" disabled>📤 画像をクリップボードへ <span class="kbd">⌘/Ctrl+C</span></button>
+      <button id="copyBtn" class="btn" disabled>📤 画像をクリップボードへ <span class="kbd">⌘/Ctrl+C</span> / <span class="kbd">C</span></button>
       <button id="downloadBtn" class="btn" disabled>💾 PNG保存</button>
       <div class="sep"></div>
       <button id="undoBtn" class="btn" disabled>↶ 元に戻す <span class="kbd">⌘/Ctrl+Z</span></button>
@@ -218,7 +218,9 @@
 
   canvas.addEventListener('touchstart', e => { if(!baseImage) return; e.preventDefault(); const {x,y}=getXY(e); startStroke(x,y); }, {passive:false});
   canvas.addEventListener('touchmove', e => { if(!baseImage) return; e.preventDefault(); const {x,y}=getXY(e); extendStroke(x,y); }, {passive:false});
-  canvas.addEventListener('touchend', () => endStroke());
+  window.addEventListener('touchend', () => endStroke(), {passive:true});
+  canvas.addEventListener('touchcancel', () => endStroke(), {passive:true});
+  window.addEventListener('touchcancel', () => endStroke(), {passive:true});
 
   canvas.addEventListener('dragover', e => { e.preventDefault(); });
   canvas.addEventListener('drop', e => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if(f) loadImageFromBlob(f); });
@@ -248,7 +250,11 @@
   }
 
   openBtn.addEventListener('click', () => fileInput.click());
-  fileInput.addEventListener('change', () => { const f=fileInput.files?.[0]; if(f) loadImageFromBlob(f); });
+  fileInput.addEventListener('change', () => {
+    const f = fileInput.files?.[0];
+    fileInput.value = '';
+    if (f) loadImageFromBlob(f);
+  });
 
   pasteBtn.addEventListener('click', async () => {
     try {
@@ -276,8 +282,10 @@
       if (!blob) throw new Error('toBlob failed');
       if (navigator.clipboard?.write) {
         await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-        copyBtn.textContent = '✅ コピーしました';
-        setTimeout(()=> copyBtn.textContent = '📤 画像をクリップボードへ ⌘/Ctrl+C', 1000);
+        copyBtn.innerHTML = '✅ コピーしました';
+        setTimeout(() => {
+          copyBtn.innerHTML = '📤 画像をクリップボードへ <span class="kbd">⌘/Ctrl+C</span> / <span class="kbd">C</span>';
+        }, 1000);
       } else {
         alert('このブラウザは画像のコピーAPIをサポートしていません。PNG保存をご利用ください。');
       }
@@ -298,8 +306,13 @@
     if(e.key === '['){ brushSize.value = Math.max(6, Number(brushSize.value) - 2); brushSize.dispatchEvent(new Event('input')); }
     if(e.key === ']'){ brushSize.value = Math.min(200, Number(brushSize.value) + 2); brushSize.dispatchEvent(new Event('input')); }
     if((e.metaKey||e.ctrlKey) && e.key.toLowerCase()==='z'){ e.preventDefault(); undoBtn.click(); }
+    if((e.metaKey||e.ctrlKey) && e.key.toLowerCase()==='c'){
+      e.preventDefault();
+      copyBtn.click();
+      return;
+    }
     if(e.key.toLowerCase()==='p'){ pasteBtn.click(); }
-    if(e.key.toLowerCase()==='c'){ copyBtn.click(); }
+    if(!e.metaKey && !e.ctrlKey && !e.altKey && e.key.toLowerCase()==='c'){ copyBtn.click(); }
     if(e.key.toLowerCase()==='d'){ downloadBtn.click(); }
   });
 })();

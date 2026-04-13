@@ -46,8 +46,7 @@ python3 -m http.server 8000
 ## GitHub Pages で公開
 1. このリポジトリを GitHub に push  
 2. Settings → Pages → Branch を `main` / `/ (root)` に設定  
-3. 公開URL: `https://<ユーザー名>.github.io/<リポジトリ名>/`  
-   - サブパス配信なら `manifest.json` の `start_url` を `"/<リポジトリ名>/"` に調整
+3. 公開URL: `https://<ユーザー名>.github.io/<リポジトリ名>/`
 
 ## ライセンス
 MIT License（`LICENSE` 参照）
