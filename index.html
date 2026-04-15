@@ -13,6 +13,10 @@
     body{margin:0; background:linear-gradient(180deg,#0b0c0f,#0e1016); color:var(--text); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;}
     header{display:flex; align-items:center; gap:12px; padding:14px 16px; background:#0e121a; border-bottom:1px solid #1f2430; position:sticky; top:0; z-index:10}
     header h1{font-size:16px; margin:0; font-weight:600; letter-spacing:.2px}
+    .header-title{display:flex; align-items:center; gap:10px; min-width:0}
+    .tool-links{display:flex; align-items:center; gap:6px; flex-wrap:wrap}
+    .tool-link{font-size:11px; color:var(--muted); text-decoration:none; padding:4px 8px; border:1px solid #242a39; border-radius:999px; background:#101520; white-space:nowrap; transition:border-color .15s ease, color .15s ease, background .15s ease}
+    .tool-link:hover{color:var(--text); border-color:#3a4356; background:#131926}
     .toolbar{display:flex; flex-wrap:wrap; gap:8px; align-items:center;}
     .btn{background:var(--panel); color:var(--text); border:1px solid #2a3140; border-radius:12px; padding:10px 12px; cursor:pointer; font-weight:600}
     .btn:hover{border-color:#3a4356}
@@ -39,7 +43,13 @@
 </head>
 <body>
   <header>
-    <h1>クイックぼかしツール – クリップボード対応</h1>
+    <div class="header-title">
+      <h1>クイックぼかしツール – クリップボード対応</h1>
+      <div class="tool-links" aria-label="関連ツール">
+        <a class="tool-link" href="https://ryjkmr.github.io/image-adjustor/" data-copy-link>コピーして画像補正へ</a>
+        <a class="tool-link" href="https://ryjkmr.github.io/image-resize-crop/" data-copy-link>コピーしてリサイズ・トリミングへ</a>
+      </div>
+    </div>
     <div class="toolbar">
       <button id="pasteBtn" class="btn">📋 クリップボードから貼り付け <span class="kbd">⌘/Ctrl+V</span></button>
       <button id="openBtn" class="btn">📂 画像を開く</button>
@@ -112,6 +122,7 @@
   const brushSizeVal = document.getElementById('brushSizeVal');
   const blurRadius = document.getElementById('blurRadius');
   const blurVal = document.getElementById('blurVal');
+  const toolLinks = [...document.querySelectorAll('[data-copy-link]')];
 
   const modeRadios = [...document.querySelectorAll('input[name="mode"]')];
   const mode = () => modeRadios.find(r => r.checked)?.value || 'blur';
@@ -290,6 +301,27 @@
         alert('このブラウザは画像のコピーAPIをサポートしていません。PNG保存をご利用ください。');
       }
     } catch (e){ console.error(e); alert('クリップボードへの書き出しに失敗しました。'); }
+  });
+
+  async function copyCanvasToClipboard() {
+    const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+    if (!blob) throw new Error('toBlob failed');
+    if (!navigator.clipboard?.write) throw new Error('clipboard write unsupported');
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+  }
+
+  toolLinks.forEach(link => {
+    link.addEventListener('click', async (e) => {
+      if (!baseImage) return;
+      e.preventDefault();
+      const href = link.href;
+      try {
+        await copyCanvasToClipboard();
+      } catch (err) {
+        console.error(err);
+      }
+      window.location.href = href;
+    });
   });
 
   downloadBtn.addEventListener('click', () => {
